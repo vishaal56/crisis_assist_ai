@@ -3,6 +3,9 @@ import 'package:lucide_icons/lucide_icons.dart';
 
 import '../chat/chat_screen.dart';
 
+import 'package:file_picker/file_picker.dart';
+import '../services/api_service.dart';
+
 enum CrisisType { supplierFailure, productionHalt, systemOutage, emergencySop }
 enum Severity { low, medium, high, critical }
 
@@ -685,7 +688,33 @@ class _RightPanelEvidence extends StatelessWidget {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: () {},
+                    onPressed: () async {
+                      try {
+                        final picked = await FilePicker.platform.pickFiles(
+                          type: FileType.custom,
+                          allowedExtensions: ['pdf'],
+                          withData: true, // IMPORTANT for Flutter Web
+                        );
+
+                        if (picked == null || picked.files.isEmpty) return;
+
+                        final file = picked.files.first;
+
+                        final result = await ApiService.uploadPdf(file);
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              "Uploaded: ${result['uploaded']} • Chunks: ${result['chunks_added']}",
+                            ),
+                          ),
+                        );
+                      } catch (e) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text("Upload failed: $e")),
+                        );
+                      }
+                    },
                     icon: const Icon(LucideIcons.upload, size: 18),
                     label: const Text("Upload Knowledge"),
                   ),

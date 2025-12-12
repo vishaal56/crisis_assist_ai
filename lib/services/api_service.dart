@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
+import 'package:file_picker/file_picker.dart';
 import '../models/chat_models.dart';
 
 class ApiService {
@@ -30,5 +31,26 @@ class ApiService {
     }
 
     return ChatResponse.fromJson(jsonDecode(res.body));
+  }
+
+  static Future<Map<String, dynamic>> uploadPdf(PlatformFile file) async {
+    final url = Uri.parse("$baseUrl/upload");
+    final req = http.MultipartRequest("POST", url);
+
+    req.files.add(
+      http.MultipartFile.fromBytes(
+        "file",
+        file.bytes!,
+        filename: file.name,
+      ),
+    );
+
+    final streamed = await req.send();
+    final res = await http.Response.fromStream(streamed);
+
+    if (res.statusCode != 200) {
+      throw Exception("Upload failed: ${res.statusCode} ${res.body}");
+    }
+    return jsonDecode(res.body);
   }
 }
