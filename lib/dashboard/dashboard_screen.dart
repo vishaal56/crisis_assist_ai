@@ -5,8 +5,11 @@ import '../chat/chat_screen.dart';
 
 import 'package:file_picker/file_picker.dart';
 import '../services/api_service.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart';
 
 enum CrisisType { supplierFailure, productionHalt, systemOutage, emergencySop }
+
 enum Severity { low, medium, high, critical }
 
 class DashboardScreen extends StatefulWidget {
@@ -63,18 +66,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         onOpenChat: _openChat,
                       ),
                       const SizedBox(height: 14),
-                      _QuickActions(onSelect: (c) {
-                        setState(() => _crisis = c);
-                        _openChat();
-                      }),
+                      _QuickActions(
+                        onSelect: (c) {
+                          setState(() => _crisis = c);
+                          _openChat();
+                        },
+                      ),
                       const SizedBox(height: 14),
                       Row(
                         children: const [
-                          Expanded(child: _KpiCard(title: "Avg Response", value: "4.2s", icon: LucideIcons.timer)),
+                          Expanded(
+                            child: _KpiCard(
+                              title: "Avg Response",
+                              value: "4.2s",
+                              icon: LucideIcons.timer,
+                            ),
+                          ),
                           SizedBox(width: 12),
-                          Expanded(child: _KpiCard(title: "Sources Used", value: "12", icon: LucideIcons.bookOpen)),
+                          Expanded(
+                            child: _KpiCard(
+                              title: "Sources Used",
+                              value: "12",
+                              icon: LucideIcons.bookOpen,
+                            ),
+                          ),
                           SizedBox(width: 12),
-                          Expanded(child: _KpiCard(title: "Open Incidents", value: "3", icon: LucideIcons.alertTriangle)),
+                          Expanded(
+                            child: _KpiCard(
+                              title: "Open Incidents",
+                              value: "3",
+                              icon: LucideIcons.alertTriangle,
+                            ),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 14),
@@ -89,15 +112,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ],
                   ),
                 ),
-              )
+              ),
             ],
           ),
         ),
         const SizedBox(width: 12),
-        const Expanded(
-          flex: 4,
-          child: _RightPanelEvidence(),
-        ),
+        const Expanded(flex: 4, child: _RightPanelEvidence()),
       ],
     );
   }
@@ -119,10 +139,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   onOpenChat: _openChat,
                 ),
                 const SizedBox(height: 14),
-                _QuickActions(onSelect: (c) {
-                  setState(() => _crisis = c);
-                  _openChat();
-                }),
+                _QuickActions(
+                  onSelect: (c) {
+                    setState(() => _crisis = c);
+                    _openChat();
+                  },
+                ),
                 const SizedBox(height: 14),
                 const _RightPanelEvidence(),
                 const SizedBox(height: 14),
@@ -141,10 +163,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => ChatScreen(
-          initialCrisis: _crisis,
-          initialSeverity: _severity,
-        ),
+        builder: (_) =>
+            ChatScreen(initialCrisis: _crisis, initialSeverity: _severity),
       ),
     );
   }
@@ -172,17 +192,44 @@ class _Sidebar extends StatelessWidget {
                 CircleAvatar(
                   radius: 18,
                   backgroundColor: Color(0xFFB42318),
-                  child: Icon(LucideIcons.shield, color: Colors.white, size: 18),
+                  child: Icon(
+                    LucideIcons.shield,
+                    color: Colors.white,
+                    size: 18,
+                  ),
                 ),
                 SizedBox(width: 10),
-                Text("CrisisAssist AI", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                Text(
+                  "CrisisAssist AI",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
               ],
             ),
             const SizedBox(height: 18),
-            _NavItem(icon: LucideIcons.layoutDashboard, label: "Dashboard", selected: true, onTap: () {}),
-            _NavItem(icon: LucideIcons.messageSquare, label: "AI Chat", selected: false, onTap: onOpenChat),
-            _NavItem(icon: LucideIcons.bookOpen, label: "Knowledge Hub", selected: false, onTap: () {}),
-            _NavItem(icon: LucideIcons.settings, label: "Settings", selected: false, onTap: () {}),
+            _NavItem(
+              icon: LucideIcons.layoutDashboard,
+              label: "Dashboard",
+              selected: true,
+              onTap: () {},
+            ),
+            _NavItem(
+              icon: LucideIcons.messageSquare,
+              label: "AI Chat",
+              selected: false,
+              onTap: onOpenChat,
+            ),
+            _NavItem(
+              icon: LucideIcons.bookOpen,
+              label: "Knowledge Hub",
+              selected: false,
+              onTap: () {},
+            ),
+            _NavItem(
+              icon: LucideIcons.settings,
+              label: "Settings",
+              selected: false,
+              onTap: () {},
+            ),
             const Spacer(),
             Container(
               padding: const EdgeInsets.all(12),
@@ -193,7 +240,10 @@ class _Sidebar extends StatelessWidget {
               ),
               child: Row(
                 children: const [
-                  CircleAvatar(radius: 16, child: Icon(LucideIcons.user, size: 16)),
+                  CircleAvatar(
+                    radius: 16,
+                    child: Icon(LucideIcons.user, size: 16),
+                  ),
                   SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -235,7 +285,9 @@ class _NavItem extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(14),
           color: selected ? const Color(0xFFFEE4E2) : Colors.transparent,
-          border: Border.all(color: selected ? const Color(0xFFFDA29B) : const Color(0xFFE5E7EB)),
+          border: Border.all(
+            color: selected ? const Color(0xFFFDA29B) : const Color(0xFFE5E7EB),
+          ),
         ),
         child: Row(
           children: [
@@ -270,7 +322,10 @@ class _TopBar extends StatelessWidget {
             decoration: InputDecoration(
               hintText: "Search SOPs, suppliers, incidents...",
               prefixIcon: const Icon(LucideIcons.search),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 14,
+              ),
             ),
           ),
         ),
@@ -322,7 +377,7 @@ class _CrisisHeader extends StatelessWidget {
                   onPressed: onOpenChat,
                   icon: const Icon(LucideIcons.sparkles, size: 18),
                   label: const Text("Ask AI with this context"),
-                )
+                ),
               ],
             ),
             const SizedBox(height: 12),
@@ -403,7 +458,9 @@ class _DropdownCard<T> extends StatelessWidget {
           DropdownButtonFormField<T>(
             initialValue: value,
             items: items
-                .map((e) => DropdownMenuItem<T>(value: e, child: Text(label(e))))
+                .map(
+                  (e) => DropdownMenuItem<T>(value: e, child: Text(label(e))),
+                )
                 .toList(),
             onChanged: (v) {
               if (v != null) onChanged(v);
@@ -428,7 +485,10 @@ class _QuickActions extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text("Quick Crisis Actions", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+            const Text(
+              "Quick Crisis Actions",
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+            ),
             const SizedBox(height: 12),
             Wrap(
               spacing: 10,
@@ -459,7 +519,7 @@ class _QuickActions extends StatelessWidget {
                   onTap: () => onSelect(CrisisType.emergencySop),
                 ),
               ],
-            )
+            ),
           ],
         ),
       ),
@@ -505,9 +565,18 @@ class _ActionChip extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+                  Text(
+                    title,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
                   const SizedBox(height: 2),
-                  Text(subtitle, style: const TextStyle(color: Color(0xFF6B7280), fontSize: 12)),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      color: Color(0xFF6B7280),
+                      fontSize: 12,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -523,7 +592,11 @@ class _KpiCard extends StatelessWidget {
   final String title;
   final String value;
   final IconData icon;
-  const _KpiCard({required this.title, required this.value, required this.icon});
+  const _KpiCard({
+    required this.title,
+    required this.value,
+    required this.icon,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -541,9 +614,21 @@ class _KpiCard extends StatelessWidget {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(color: Color(0xFF6B7280), fontSize: 12)),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Color(0xFF6B7280),
+                    fontSize: 12,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
               ],
             ),
           ],
@@ -564,11 +649,23 @@ class _RecentActivity extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: const [
-            Text("Recent Activity", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+            Text(
+              "Recent Activity",
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+            ),
             SizedBox(height: 12),
-            _ActivityRow(title: "Asked: alternate suppliers for resin X12", time: "2m ago"),
-            _ActivityRow(title: "Opened: SOP - Emergency Production Change", time: "18m ago"),
-            _ActivityRow(title: "Resolved: IT Outage workaround checklist", time: "1h ago"),
+            _ActivityRow(
+              title: "Asked: alternate suppliers for resin X12",
+              time: "2m ago",
+            ),
+            _ActivityRow(
+              title: "Opened: SOP - Emergency Production Change",
+              time: "18m ago",
+            ),
+            _ActivityRow(
+              title: "Resolved: IT Outage workaround checklist",
+              time: "1h ago",
+            ),
           ],
         ),
       ),
@@ -589,8 +686,16 @@ class _ActivityRow extends StatelessWidget {
         children: [
           const Icon(LucideIcons.dot, size: 18),
           const SizedBox(width: 8),
-          Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w600))),
-          Text(time, style: const TextStyle(color: Color(0xFF6B7280), fontSize: 12)),
+          Expanded(
+            child: Text(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+          Text(
+            time,
+            style: const TextStyle(color: Color(0xFF6B7280), fontSize: 12),
+          ),
         ],
       ),
     );
@@ -608,11 +713,23 @@ class _RecommendedPlaybooks extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text("Recommended Playbooks", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+            const Text(
+              "Recommended Playbooks",
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+            ),
             const SizedBox(height: 12),
-            _PlaybookTile(title: "Supplier Failure – Alternate Vendor Protocol", meta: "SOP • Updated 2 weeks ago"),
-            _PlaybookTile(title: "Emergency Production Change – Safety Checklist", meta: "Checklist • Updated 1 month ago"),
-            _PlaybookTile(title: "System Outage – Offline Operations Guide", meta: "Guide • Updated 3 days ago"),
+            _PlaybookTile(
+              title: "Supplier Failure – Alternate Vendor Protocol",
+              meta: "SOP • Updated 2 weeks ago",
+            ),
+            _PlaybookTile(
+              title: "Emergency Production Change – Safety Checklist",
+              meta: "Checklist • Updated 1 month ago",
+            ),
+            _PlaybookTile(
+              title: "System Outage – Offline Operations Guide",
+              meta: "Guide • Updated 3 days ago",
+            ),
           ],
         ),
       ),
@@ -647,9 +764,18 @@ class _PlaybookTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+                Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
                 const SizedBox(height: 2),
-                Text(meta, style: const TextStyle(color: Color(0xFF6B7280), fontSize: 12)),
+                Text(
+                  meta,
+                  style: const TextStyle(
+                    color: Color(0xFF6B7280),
+                    fontSize: 12,
+                  ),
+                ),
               ],
             ),
           ),
@@ -671,16 +797,28 @@ class _RightPanelEvidence extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text("Evidence & Trust Panel", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+            const Text(
+              "Evidence & Trust Panel",
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+            ),
             const SizedBox(height: 8),
             const Text(
               "AI answers will cite these sources (reduces hallucinations + improves trust).",
               style: TextStyle(color: Color(0xFF6B7280)),
             ),
             const SizedBox(height: 12),
-            _EvidenceTile(title: "SOP-014: Emergency Production Change", meta: "SOP • Updated 2025-11-28 • Confidence: 0.86"),
-            _EvidenceTile(title: "Supplier DB: Resin Category – Tier 1 Vendors", meta: "Database • Updated 2025-12-01 • Confidence: 0.79"),
-            _EvidenceTile(title: "Training: New Process Line Setup", meta: "Training • Updated 2025-10-12 • Confidence: 0.74"),
+            _EvidenceTile(
+              title: "SOP-014: Emergency Production Change",
+              meta: "SOP • Updated 2025-11-28 • Confidence: 0.86",
+            ),
+            _EvidenceTile(
+              title: "Supplier DB: Resin Category – Tier 1 Vendors",
+              meta: "Database • Updated 2025-12-01 • Confidence: 0.79",
+            ),
+            _EvidenceTile(
+              title: "Training: New Process Line Setup",
+              meta: "Training • Updated 2025-10-12 • Confidence: 0.74",
+            ),
             const SizedBox(height: 12),
             const Divider(),
             const SizedBox(height: 8),
@@ -692,26 +830,51 @@ class _RightPanelEvidence extends StatelessWidget {
                       try {
                         final picked = await FilePicker.platform.pickFiles(
                           type: FileType.custom,
-                          allowedExtensions: ['pdf'],
-                          withData: true, // IMPORTANT for Flutter Web
+                          allowedExtensions: const ['pdf'],
+                          withData: true, // REQUIRED for Flutter Web
                         );
 
                         if (picked == null || picked.files.isEmpty) return;
 
                         final file = picked.files.first;
 
-                        final result = await ApiService.uploadPdf(file);
+                        final bytes = file.bytes;
+                        if (bytes == null) {
+                          throw Exception(
+                            'No file bytes found. Make sure withData: true.',
+                          );
+                        }
+
+                        final originalName = file.name;
+                        final safeName = originalName.replaceAll(
+                          RegExp(r'[^a-zA-Z0-9._-]'),
+                          '_',
+                        );
+
+                        final storagePath =
+                            'knowledge/${DateTime.now().millisecondsSinceEpoch}_$safeName';
+
+                        final ref = FirebaseStorage.instance.ref().child(
+                          storagePath,
+                        );
+
+                        await ref.putData(
+                          bytes,
+                          SettableMetadata(
+                            contentType: 'application/pdf',
+                            customMetadata: {
+                              'originalName': originalName,
+                              'platform': kIsWeb ? 'web' : 'mobile',
+                            },
+                          ),
+                        );
 
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              "Uploaded: ${result['uploaded']} • Chunks: ${result['chunks_added']}",
-                            ),
-                          ),
+                          SnackBar(content: Text('Uploaded ✅ $originalName')),
                         );
                       } catch (e) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text("Upload failed: $e")),
+                          SnackBar(content: Text('Upload failed: $e')),
                         );
                       }
                     },
@@ -728,7 +891,7 @@ class _RightPanelEvidence extends StatelessWidget {
                   ),
                 ),
               ],
-            )
+            ),
           ],
         ),
       ),
@@ -763,9 +926,18 @@ class _EvidenceTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+                Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
                 const SizedBox(height: 2),
-                Text(meta, style: const TextStyle(color: Color(0xFF6B7280), fontSize: 12)),
+                Text(
+                  meta,
+                  style: const TextStyle(
+                    color: Color(0xFF6B7280),
+                    fontSize: 12,
+                  ),
+                ),
               ],
             ),
           ),

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "424484452386",
+    "project_id": "crisis-assist-ai",
+    "storage_bucket": "crisis-assist-ai.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:424484452386:android:9f7bb09d015cb03f96f27b",
+        "android_client_info": {
+          "package_name": "com.example.crisis_assist_ai"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBkwgFVoPY6i-aSqCWdh-1IJRRPhba-yQ0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
