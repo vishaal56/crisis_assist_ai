@@ -4,15 +4,19 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../chat/chat_screen.dart';
 
 import 'package:file_picker/file_picker.dart';
-import '../knowledge_base/knowledge_hub_screen.dart';
-import '../services/api_service.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
+
+// ✅ NEW: Firestore (database for Knowledge Hub)
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 enum CrisisType { supplierFailure, productionHalt, systemOutage, emergencySop }
 
 enum Severity { low, medium, high, critical }
 
+/// ---------------------------
+/// Category store + dialog (used by Upload Knowledge)
+/// ---------------------------
 class KnowledgeCategoryStore extends ChangeNotifier {
   KnowledgeCategoryStore();
 
@@ -21,6 +25,7 @@ class KnowledgeCategoryStore extends ChangeNotifier {
     'Supplier',
     'Training',
     'Incidents',
+    'Safety',
   ];
 
   List<String> get categories => List.unmodifiable(_categories);
@@ -28,7 +33,8 @@ class KnowledgeCategoryStore extends ChangeNotifier {
   void add(String name) {
     final cleaned = name.trim();
     if (cleaned.isEmpty) return;
-    final exists = _categories.any((c) => c.toLowerCase() == cleaned.toLowerCase());
+    final exists =
+    _categories.any((c) => c.toLowerCase() == cleaned.toLowerCase());
     if (exists) return;
     _categories.add(cleaned);
     _categories.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
@@ -188,7 +194,7 @@ Future<String?> showCategoryPickerDialog({
               ),
               ElevatedButton(
                 onPressed:
-                    selected == null ? null : () => Navigator.pop(ctx, selected),
+                selected == null ? null : () => Navigator.pop(ctx, selected),
                 child: const Text('Continue'),
               ),
             ],
@@ -209,6 +215,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   CrisisType _crisis = CrisisType.supplierFailure;
   Severity _severity = Severity.high;
+
   final KnowledgeCategoryStore _categoryStore = KnowledgeCategoryStore();
 
   @override
@@ -305,7 +312,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ),
         const SizedBox(width: 12),
-        Expanded(flex: 4, child: _RightPanelEvidence(categoryStore: _categoryStore)),
+        Expanded(
+          flex: 4,
+          child: _RightPanelEvidence(categoryStore: _categoryStore),
+        ),
       ],
     );
   }
@@ -358,6 +368,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
+/// ---------------------------
+/// Sidebar
+/// ---------------------------
 class _Sidebar extends StatelessWidget {
   final VoidCallback onOpenChat;
   const _Sidebar({required this.onOpenChat});
@@ -406,17 +419,12 @@ class _Sidebar extends StatelessWidget {
               selected: false,
               onTap: onOpenChat,
             ),
-        _NavItem(
-          icon: LucideIcons.bookOpen,
-          label: "Knowledge Hub",
-          selected: false,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const KnowledgeHubScreen()),
-            );
-          },
-        ),
+            _NavItem(
+              icon: LucideIcons.bookOpen,
+              label: "Knowledge Hub",
+              selected: false,
+              onTap: () {},
+            ),
             _NavItem(
               icon: LucideIcons.settings,
               label: "Settings",
@@ -533,6 +541,9 @@ class _TopBar extends StatelessWidget {
   }
 }
 
+/// ---------------------------
+/// Cards / Panels
+/// ---------------------------
 class _CrisisHeader extends StatelessWidget {
   final CrisisType crisis;
   final Severity severity;
@@ -653,7 +664,7 @@ class _DropdownCard<T> extends StatelessWidget {
             items: items
                 .map(
                   (e) => DropdownMenuItem<T>(value: e, child: Text(label(e))),
-                )
+            )
                 .toList(),
             onChanged: (v) {
               if (v != null) onChanged(v);
@@ -1020,27 +1031,30 @@ class _RightPanelEvidence extends StatelessWidget {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
+                    // ✅ UPDATED: Upload + Firestore write
                     onPressed: () async {
                       try {
+                        // 1) Choose category
                         final category = await showCategoryPickerDialog(
                           context: context,
                           store: categoryStore,
                         );
                         if (category == null) return;
 
+                        // 2) Pick file
                         final picked = await FilePicker.platform.pickFiles(
                           type: FileType.custom,
                           allowedExtensions: const ['pdf'],
                           withData: true, // REQUIRED for Flutter Web
                         );
-
                         if (picked == null || picked.files.isEmpty) return;
 
                         final file = picked.files.first;
-
                         final bytes = file.bytes;
                         if (bytes == null) {
-                          throw Exception('No file bytes found. Make sure withData: true.');
+                          throw Exception(
+                            'No file bytes found. Make sure withData: true.',
+                          );
                         }
 
                         final originalName = file.name;
@@ -1049,10 +1063,13 @@ class _RightPanelEvidence extends StatelessWidget {
                           '_',
                         );
 
+                        // 3) Upload to Storage
                         final storagePath =
                             'knowledge/$category/${DateTime.now().millisecondsSinceEpoch}_$safeName';
 
-                        final ref = FirebaseStorage.instance.ref().child(storagePath);
+                        final ref = FirebaseStorage.instance.ref().child(
+                          storagePath,
+                        );
 
                         await ref.putData(
                           bytes,
@@ -1066,8 +1083,26 @@ class _RightPanelEvidence extends StatelessWidget {
                           ),
                         );
 
+                        // ✅ 4) Get download URL
+                        final url = await ref.getDownloadURL();
+
+                        // ✅ 5) Save metadata to Firestore (database)
+                        await FirebaseFirestore.instance
+                            .collection('knowledge')
+                            .add({
+                          'name': originalName,
+                          'safeName': safeName,
+                          'category': category,
+                          'storagePath': storagePath,
+                          'url': url,
+                          'uploadedAt': FieldValue.serverTimestamp(),
+                        });
+
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Uploaded ✅ $originalName to "$category"')),
+                          SnackBar(
+                            content:
+                            Text('Uploaded ✅ $originalName to "$category"'),
+                          ),
                         );
                       } catch (e) {
                         ScaffoldMessenger.of(context).showSnackBar(
