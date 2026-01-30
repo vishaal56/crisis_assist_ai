@@ -86,9 +86,13 @@ class ChatResponse(BaseModel):
 def health():
     return {"status": "ok", "docs": len(DOC_STORE)}
 
+from fastapi import Form
 
 @app.post("/upload")
-async def upload(file: UploadFile = File(...)):
+async def upload(
+        file: UploadFile = File(...),
+        doc_type: str = Form(...)
+):
     # Save file
     file_id = str(uuid.uuid4())
     out_path = os.path.join(DATA_DIR, f"{file_id}_{file.filename}")
@@ -105,8 +109,12 @@ async def upload(file: UploadFile = File(...)):
             "id": f"{file_id}_{idx}",
             "doc_name": file.filename,
             "chunk": ch,
-            "meta": {"chunk_index": idx}
+            "meta": {
+                "chunk_index": idx,
+                "doc_type": doc_type
+            }
         })
+
 
     rebuild_faiss()
 

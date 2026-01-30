@@ -6,6 +6,8 @@ import '../services/api_service.dart';
 import '../models/chat_models.dart';
 import 'evidence_notifier.dart';
 
+import 'package:crisis_assist_ai/core/app_enums.dart';
+
 class ChatScreen extends StatelessWidget {
   final CrisisType initialCrisis;
   final Severity initialSeverity;

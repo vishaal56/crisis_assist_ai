@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../chat/chat_screen.dart';
-import '../core/app_enums.dart';
+import 'package:crisis_assist_ai/core/app_enums.dart';
 import '../knowledge_base/knowledge_hub_screen.dart';
 
 import 'package:file_picker/file_picker.dart';
@@ -369,6 +369,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 }
+
 
 /// ---------------------------
 /// Sidebar

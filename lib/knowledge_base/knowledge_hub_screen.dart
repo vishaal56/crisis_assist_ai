@@ -7,12 +7,11 @@ import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 
+import 'package:crisis_assist_ai/core/app_enums.dart';
 // ✅ NEW: Firestore (database for Knowledge Hub)
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-enum CrisisType { supplierFailure, productionHalt, systemOutage, emergencySop }
 
-enum Severity { low, medium, high, critical }
 
 /// ---------------------------
 /// Category store + dialog (used by Upload Knowledge)
@@ -1175,6 +1174,17 @@ class _EvidenceTile extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class KnowledgeHubScreen extends StatelessWidget {
+  const KnowledgeHubScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(child: Text("Knowledge Hub")),
     );
   }
 }

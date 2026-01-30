@@ -5,13 +5,13 @@ import '../chat/chat_screen.dart';
 
 import 'package:file_picker/file_picker.dart';
 import '../knowledge_base/knowledge_hub_screen.dart';
-import '../services/api_service.dart';
+//import '../services/api_service.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 
-enum CrisisType { supplierFailure, productionHalt, systemOutage, emergencySop }
+import 'package:crisis_assist_ai/core/app_enums.dart';
 
-enum Severity { low, medium, high, critical }
+import '../knowledge_base/knowledge_hub_screen.dart';
 
 class KnowledgeCategoryStore extends ChangeNotifier {
   KnowledgeCategoryStore();
