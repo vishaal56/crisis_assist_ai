@@ -13,6 +13,9 @@ import 'package:crisis_assist_ai/core/app_enums.dart';
 
 import '../knowledge_base/knowledge_hub_screen.dart';
 
+import 'package:crisis_assist_ai/config/gemini_config.dart';
+import 'package:crisis_assist_ai/services/gemini_service.dart';
+
 class KnowledgeCategoryStore extends ChangeNotifier {
   KnowledgeCategoryStore();
 

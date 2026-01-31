@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-import '../dashboard/dashboard_screen.dart';
-import '../services/api_service.dart';
-import '../models/chat_models.dart';
-import 'evidence_notifier.dart';
-
 import 'package:crisis_assist_ai/core/app_enums.dart';
+import '../services/gemini_service.dart';
+
+/// Evidence: keep it super simple so it never breaks types.
+/// Each item is a map with: title, subtitle, confidence.
+final ValueNotifier<List<Map<String, String>>> evidenceNotifier =
+ValueNotifier<List<Map<String, String>>>([]);
 
 class ChatScreen extends StatelessWidget {
   final CrisisType initialCrisis;
@@ -33,14 +34,12 @@ class ChatScreen extends StatelessWidget {
                 width: 280,
                 child: ChatHistoryPanel(),
               ),
-
             Expanded(
               child: ChatMainPanel(
                 initialCrisis: initialCrisis,
                 initialSeverity: initialSeverity,
               ),
             ),
-
             if (isWide)
               const SizedBox(
                 width: 340,
@@ -75,13 +74,10 @@ class ChatHistoryPanel extends StatelessWidget {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 12),
-
             const HistoryTile(title: "Supplier Failure – Resin X12", time: "2m ago"),
             const HistoryTile(title: "System Outage – ERP Down", time: "1h ago"),
             const HistoryTile(title: "Emergency SOP – Line Change", time: "Yesterday"),
-
             const Spacer(),
-
             OutlinedButton.icon(
               onPressed: () {},
               icon: const Icon(LucideIcons.plus, size: 18),
@@ -148,64 +144,123 @@ class ChatMainPanel extends StatefulWidget {
 class _ChatMainPanelState extends State<ChatMainPanel> {
   bool _loading = false;
   final TextEditingController _controller = TextEditingController();
+  final ScrollController _scroll = ScrollController();
 
   final List<_ChatMessage> _messages = [
     _ChatMessage(
-      isUser: true,
-      text: "Our resin supplier X12 has failed. What should we do?",
-    ),
-    _ChatMessage(
       isUser: false,
-      text: "✔ Immediate Actions\n"
-          "• Pause affected production line\n"
-          "• Notify procurement team\n"
-          "• Switch to approved alternate suppliers\n\n"
-          "⚠ Risks & Notes\n"
-          "• Alternate suppliers may require quality validation\n"
-          "• Transport delays possible\n\n"
-          "📄 Sources Used\n"
-          "SOP-014, Supplier DB – Tier 1 Vendors",
+      text:
+      "Hi! I’m CrisisAssist AI.\n\nAsk me anything about SOPs, suppliers, incidents, or immediate next steps.",
     ),
   ];
 
   @override
   void dispose() {
     _controller.dispose();
+    _scroll.dispose();
     super.dispose();
   }
 
-  void _send() async {
+  String _crisisLabel(CrisisType c) {
+    switch (c) {
+      case CrisisType.supplierFailure:
+        return "Supplier Failure";
+      case CrisisType.productionHalt:
+        return "Production Halt";
+      case CrisisType.systemOutage:
+        return "System Outage";
+      case CrisisType.emergencySop:
+        return "Emergency SOP";
+    }
+  }
+
+  String _severityLabel(Severity s) {
+    switch (s) {
+      case Severity.low:
+        return "Low";
+      case Severity.medium:
+        return "Medium";
+      case Severity.high:
+        return "High";
+      case Severity.critical:
+        return "Critical";
+    }
+  }
+
+  String _buildPrompt(String userText) {
+    return '''
+You are a crisis response assistant for a manufacturing company.
+Be concise, structured, and action-oriented.
+
+Context:
+- Crisis Type: ${_crisisLabel(widget.initialCrisis)}
+- Severity: ${_severityLabel(widget.initialSeverity)}
+
+User question:
+$userText
+
+Respond in this format:
+1) Immediate actions (bullets)
+2) Risks / watchouts (bullets)
+3) Next 30 minutes checklist (bullets)
+''';
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scroll.hasClients) return;
+      _scroll.animateTo(
+        _scroll.position.maxScrollExtent + 200,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
+    });
+  }
+
+  Future<void> _send() async {
     final text = _controller.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty || _loading) return;
 
     setState(() {
       _messages.add(_ChatMessage(isUser: true, text: text));
       _loading = true;
     });
     _controller.clear();
+    _scrollToBottom();
 
     try {
-      final resp = await ApiService.sendChat(
-        message: text,
-        crisisType: widget.initialCrisis.name,
-        severity: widget.initialSeverity.name,
-      );
+      final prompt = _buildPrompt(text);
+      final reply = await GeminiService.sendMessage(prompt);
+
+      if (!mounted) return;
 
       setState(() {
-        _messages.add(_ChatMessage(isUser: false, text: resp.answer));
-        _loading = false;
+        _messages.add(_ChatMessage(isUser: false, text: reply));
       });
 
-      // ✅ THIS fixes the evidence errors
-      evidenceNotifier.value = resp.sources;
-
+      // Evidence panel: Gemini doesn't provide sources, so show "what was used"
+      evidenceNotifier.value = [
+        {
+          "title": "Gemini",
+          "subtitle": "gemini-1.5-flash",
+          "confidence": "n/a",
+        },
+        {
+          "title": "Context",
+          "subtitle": "${_crisisLabel(widget.initialCrisis)} • ${_severityLabel(widget.initialSeverity)}",
+          "confidence": "n/a",
+        },
+      ];
     } catch (e) {
+      if (!mounted) return;
       setState(() {
-        _messages.add(
-          _ChatMessage(isUser: false, text: "Error retrieving knowledge."),
-        );
-        _loading = false;
+        _messages.add(_ChatMessage(isUser: false, text: "⚠️ Gemini error: $e"));
       });
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+        _scrollToBottom();
+      }
     }
   }
 
@@ -219,16 +274,23 @@ class _ChatMainPanelState extends State<ChatMainPanel> {
         ),
         Expanded(
           child: ListView.builder(
+            controller: _scroll,
             padding: const EdgeInsets.all(18),
             itemCount: _messages.length,
             itemBuilder: (_, i) {
               final m = _messages[i];
-              return m.isUser
-                  ? UserBubble(text: m.text)
-                  : AIBubble(text: m.text);
+              return m.isUser ? UserBubble(text: m.text) : AIBubble(text: m.text);
             },
           ),
         ),
+        if (_loading)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 8),
+            child: Text(
+              "Thinking…",
+              style: TextStyle(color: Color(0xFF6B7280)),
+            ),
+          ),
         _ChatInputBar(
           controller: _controller,
           onSend: _send,
@@ -410,17 +472,33 @@ class ChatEvidencePanel extends StatelessWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            Text(
-              "Evidence Used",
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-            ),
-            SizedBox(height: 12),
-            EvidenceItem(title: "SOP-014", subtitle: "Emergency Production Change", confidence: "0.86"),
-            EvidenceItem(title: "Supplier DB", subtitle: "Resin Tier-1 Vendors", confidence: "0.79"),
-          ],
+        child: ValueListenableBuilder<List<Map<String, String>>>(
+          valueListenable: evidenceNotifier,
+          builder: (context, sources, _) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Evidence Used",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 12),
+                if (sources.isEmpty)
+                  const Text(
+                    "No evidence yet.",
+                    style: TextStyle(color: Color(0xFF6B7280)),
+                  )
+                else
+                  ...sources.map(
+                        (s) => EvidenceItem(
+                      title: s["title"] ?? "Unknown",
+                      subtitle: s["subtitle"] ?? "",
+                      confidence: s["confidence"] ?? "n/a",
+                    ),
+                  ),
+              ],
+            );
+          },
         ),
       ),
     );
