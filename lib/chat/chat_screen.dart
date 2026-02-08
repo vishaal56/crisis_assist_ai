@@ -2,10 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import 'package:crisis_assist_ai/core/app_enums.dart';
-import '../services/gemini_service.dart';
+import '../services/openai_service.dart';
 
-/// Evidence: keep it super simple so it never breaks types.
-/// Each item is a map with: title, subtitle, confidence.
+/// Evidence panel items are simple maps so it never breaks types.
 final ValueNotifier<List<Map<String, String>>> evidenceNotifier =
 ValueNotifier<List<Map<String, String>>>([]);
 
@@ -74,9 +73,18 @@ class ChatHistoryPanel extends StatelessWidget {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 12),
-            const HistoryTile(title: "Supplier Failure – Resin X12", time: "2m ago"),
-            const HistoryTile(title: "System Outage – ERP Down", time: "1h ago"),
-            const HistoryTile(title: "Emergency SOP – Line Change", time: "Yesterday"),
+            const HistoryTile(
+              title: "Supplier Failure – Resin X12",
+              time: "2m ago",
+            ),
+            const HistoryTile(
+              title: "System Outage – ERP Down",
+              time: "1h ago",
+            ),
+            const HistoryTile(
+              title: "Emergency SOP – Line Change",
+              time: "Yesterday",
+            ),
             const Spacer(),
             OutlinedButton.icon(
               onPressed: () {},
@@ -187,7 +195,7 @@ class _ChatMainPanelState extends State<ChatMainPanel> {
     }
   }
 
-  String _buildPrompt(String userText) {
+  String _buildSystemContext() {
     return '''
 You are a crisis response assistant for a manufacturing company.
 Be concise, structured, and action-oriented.
@@ -196,10 +204,7 @@ Context:
 - Crisis Type: ${_crisisLabel(widget.initialCrisis)}
 - Severity: ${_severityLabel(widget.initialSeverity)}
 
-User question:
-$userText
-
-Respond in this format:
+When answering, use this format:
 1) Immediate actions (bullets)
 2) Risks / watchouts (bullets)
 3) Next 30 minutes checklist (bullets)
@@ -217,6 +222,51 @@ Respond in this format:
     });
   }
 
+  String _buildPrompt(String userText) {
+    String crisisLabel(CrisisType c) {
+      switch (c) {
+        case CrisisType.supplierFailure:
+          return "Supplier Failure";
+        case CrisisType.productionHalt:
+          return "Production Halt";
+        case CrisisType.systemOutage:
+          return "System Outage";
+        case CrisisType.emergencySop:
+          return "Emergency SOP";
+      }
+    }
+
+    String severityLabel(Severity s) {
+      switch (s) {
+        case Severity.low:
+          return "Low";
+        case Severity.medium:
+          return "Medium";
+        case Severity.high:
+          return "High";
+        case Severity.critical:
+          return "Critical";
+      }
+    }
+
+    return '''
+You are a crisis response assistant for a manufacturing company.
+Be concise, structured, and action-oriented.
+
+Context:
+- Crisis Type: ${crisisLabel(widget.initialCrisis)}
+- Severity: ${severityLabel(widget.initialSeverity)}
+
+User question:
+$userText
+
+Respond in this format:
+1) Immediate actions (bullets)
+2) Risks / watchouts (bullets)
+3) Next 30 minutes checklist (bullets)
+''';
+  }
+
   Future<void> _send() async {
     final text = _controller.text.trim();
     if (text.isEmpty || _loading) return;
@@ -225,12 +275,15 @@ Respond in this format:
       _messages.add(_ChatMessage(isUser: true, text: text));
       _loading = true;
     });
+
     _controller.clear();
     _scrollToBottom();
 
     try {
       final prompt = _buildPrompt(text);
-      final reply = await GeminiService.sendMessage(prompt);
+
+      // ✅ THIS LINE FIXES THE ERROR
+      final reply = await OpenAIService.sendMessage(prompt);
 
       if (!mounted) return;
 
@@ -238,23 +291,25 @@ Respond in this format:
         _messages.add(_ChatMessage(isUser: false, text: reply));
       });
 
-      // Evidence panel: Gemini doesn't provide sources, so show "what was used"
       evidenceNotifier.value = [
         {
-          "title": "Gemini",
-          "subtitle": "gemini-1.5-flash",
+          "title": "OpenAI",
+          "subtitle": OpenAIService.modelName(),
           "confidence": "n/a",
         },
         {
           "title": "Context",
-          "subtitle": "${_crisisLabel(widget.initialCrisis)} • ${_severityLabel(widget.initialSeverity)}",
+          "subtitle":
+          "${_crisisLabel(widget.initialCrisis)} • ${_severityLabel(widget.initialSeverity)}",
           "confidence": "n/a",
         },
       ];
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _messages.add(_ChatMessage(isUser: false, text: "⚠️ Gemini error: $e"));
+        _messages.add(
+          _ChatMessage(isUser: false, text: "⚠️ OpenAI error: $e"),
+        );
       });
     } finally {
       if (mounted) {
@@ -279,7 +334,9 @@ Respond in this format:
             itemCount: _messages.length,
             itemBuilder: (_, i) {
               final m = _messages[i];
-              return m.isUser ? UserBubble(text: m.text) : AIBubble(text: m.text);
+              return m.isUser
+                  ? UserBubble(text: m.text)
+                  : AIBubble(text: m.text);
             },
           ),
         ),
