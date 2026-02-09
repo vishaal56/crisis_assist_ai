@@ -1,21 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-import '../chat/chat_screen.dart';
-
 import 'package:file_picker/file_picker.dart';
-import '../knowledge_base/knowledge_hub_screen.dart';
-//import '../services/api_service.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:crisis_assist_ai/core/app_enums.dart';
+import 'package:crisis_assist_ai/chat/chat_screen.dart';
+import 'package:crisis_assist_ai/knowledge_base/knowledge_hub_screen.dart';
 
-import '../knowledge_base/knowledge_hub_screen.dart';
-
-import 'package:crisis_assist_ai/config/gemini_config.dart';
-import 'package:crisis_assist_ai/services/openai_service.dart';
-
+/// ---------------------------
+/// Category store
+/// ---------------------------
 class KnowledgeCategoryStore extends ChangeNotifier {
   KnowledgeCategoryStore();
 
@@ -24,6 +21,7 @@ class KnowledgeCategoryStore extends ChangeNotifier {
     'Supplier',
     'Training',
     'Incidents',
+    'Safety',
   ];
 
   List<String> get categories => List.unmodifiable(_categories);
@@ -44,155 +42,192 @@ class KnowledgeCategoryStore extends ChangeNotifier {
   }
 }
 
-Future<String?> showCategoryPickerDialog({
+/// ---------------------------
+/// Single dialog model
+/// ---------------------------
+class KnowledgeUploadInfo {
+  final String category;
+  final String name;
+  final String department;
+  final String phone;
+  final String email;
+  final String reportingHead;
+
+  KnowledgeUploadInfo({
+    required this.category,
+    required this.name,
+    required this.department,
+    required this.phone,
+    required this.email,
+    required this.reportingHead,
+  });
+}
+
+/// ---------------------------
+/// Single dialog: category + owner info
+/// ---------------------------
+Future<KnowledgeUploadInfo?> showKnowledgeUploadDialog({
   required BuildContext context,
   required KnowledgeCategoryStore store,
 }) async {
-  String? selected = store.categories.isNotEmpty ? store.categories.first : null;
-  final controller = TextEditingController();
+  final nameCtrl = TextEditingController();
+  final deptCtrl = TextEditingController();
+  final phoneCtrl = TextEditingController();
+  final emailCtrl = TextEditingController();
+  final headCtrl = TextEditingController();
+  final newCatCtrl = TextEditingController();
 
-  return showDialog<String?>(
+  String? selectedCategory = store.categories.isNotEmpty ? store.categories.first : null;
+
+  bool validEmail(String v) => RegExp(r'^\S+@\S+\.\S+$').hasMatch(v.trim());
+
+  return showDialog<KnowledgeUploadInfo?>(
     context: context,
     barrierDismissible: false,
     builder: (ctx) {
+      String? error;
+
       return StatefulBuilder(
         builder: (ctx, setState) {
           return AlertDialog(
-            title: const Text('Choose a category'),
+            title: const Text("Upload Knowledge"),
             content: SizedBox(
-              width: 520,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Existing categories
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: const Color(0xFFE5E7EB)),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Existing categories',
-                          style: TextStyle(fontWeight: FontWeight.w700),
-                        ),
-                        const SizedBox(height: 8),
-                        if (store.categories.isEmpty)
+              width: 560,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Category selector + add category
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                           const Text(
-                            'No categories yet. Create one below.',
-                            style: TextStyle(color: Color(0xFF6B7280)),
-                          )
-                        else
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: store.categories.map((c) {
-                              final isSelected = selected == c;
-                              return InkWell(
-                                onTap: () => setState(() => selected = c),
-                                borderRadius: BorderRadius.circular(20),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 8,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(
-                                      color: isSelected
-                                          ? const Color(0xFFFDA29B)
-                                          : const Color(0xFFE5E7EB),
-                                    ),
-                                    color: isSelected
-                                        ? const Color(0xFFFEE4E2)
-                                        : Colors.white,
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        c,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 6),
-                                      GestureDetector(
-                                        onTap: () {
-                                          store.delete(c);
-                                          if (selected == c) {
-                                            selected = store.categories.isNotEmpty
-                                                ? store.categories.first
-                                                : null;
-                                          }
-                                          setState(() {});
-                                        },
-                                        child: const Icon(
-                                          Icons.close,
-                                          size: 16,
-                                          color: Color(0xFF6B7280),
-                                        ),
-                                      ),
-                                    ],
+                            "Category",
+                            style: TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                          const SizedBox(height: 10),
+
+                          DropdownButtonFormField<String>(
+                            value: selectedCategory,
+                            items: store.categories
+                                .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                                .toList(),
+                            onChanged: (v) => setState(() => selectedCategory = v),
+                            decoration: const InputDecoration(
+                              labelText: "Select category",
+                              border: OutlineInputBorder(),
+                              isDense: true,
+                            ),
+                          ),
+
+                          const SizedBox(height: 10),
+
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: newCatCtrl,
+                                  decoration: const InputDecoration(
+                                    labelText: "New category (optional)",
+                                    border: OutlineInputBorder(),
+                                    isDense: true,
                                   ),
                                 ),
-                              );
-                            }).toList(),
+                              ),
+                              const SizedBox(width: 10),
+                              ElevatedButton.icon(
+                                onPressed: () {
+                                  final name = newCatCtrl.text.trim();
+                                  if (name.isEmpty) return;
+                                  store.add(name);
+                                  newCatCtrl.clear();
+                                  setState(() {
+                                    selectedCategory = name;
+                                  });
+                                },
+                                icon: const Icon(Icons.add, size: 18),
+                                label: const Text("Add"),
+                              ),
+                            ],
                           ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 14),
 
-                  // Create new category
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: controller,
-                          decoration: const InputDecoration(
-                            labelText: 'New category name',
-                            hintText: 'e.g. Quality, Safety, Vendor Contracts',
-                            border: OutlineInputBorder(),
-                            isDense: true,
+                          const SizedBox(height: 8),
+                          const Text(
+                            "Tip: You can add a new category, then select it.",
+                            style: TextStyle(color: Color(0xFF6B7280), fontSize: 12),
                           ),
-                        ),
+                        ],
                       ),
-                      const SizedBox(width: 10),
-                      ElevatedButton.icon(
-                        onPressed: () {
-                          final name = controller.text;
-                          store.add(name);
-                          controller.clear();
-                          if (selected == null && store.categories.isNotEmpty) {
-                            selected = store.categories.first;
-                          }
-                          setState(() {});
-                        },
-                        icon: const Icon(Icons.add, size: 18),
-                        label: const Text('Add'),
-                      ),
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    // Owner fields
+                    _inputField(nameCtrl, "Owner Name"),
+                    const SizedBox(height: 10),
+                    _inputField(deptCtrl, "Department"),
+                    const SizedBox(height: 10),
+                    _inputField(phoneCtrl, "Phone"),
+                    const SizedBox(height: 10),
+                    _inputField(emailCtrl, "Email"),
+                    const SizedBox(height: 10),
+                    _inputField(headCtrl, "Reporting Head"),
+
+                    if (error != null) ...[
+                      const SizedBox(height: 12),
+                      Text(error!, style: const TextStyle(color: Colors.red)),
                     ],
-                  ),
-                  const SizedBox(height: 10),
-                  const Text(
-                    'Tip: Tap a category to select it. Click ✕ to delete it.',
-                    style: TextStyle(color: Color(0xFF6B7280), fontSize: 12),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, null),
-                child: const Text('Cancel'),
+                child: const Text("Cancel"),
               ),
               ElevatedButton(
-                onPressed:
-                    selected == null ? null : () => Navigator.pop(ctx, selected),
-                child: const Text('Continue'),
+                onPressed: () {
+                  final cat = selectedCategory?.trim() ?? "";
+                  final name = nameCtrl.text.trim();
+                  final dept = deptCtrl.text.trim();
+                  final phone = phoneCtrl.text.trim();
+                  final email = emailCtrl.text.trim();
+                  final head = headCtrl.text.trim();
+
+                  if (cat.isEmpty ||
+                      name.isEmpty ||
+                      dept.isEmpty ||
+                      phone.isEmpty ||
+                      email.isEmpty ||
+                      head.isEmpty) {
+                    setState(() => error = "All fields are required.");
+                    return;
+                  }
+                  if (!validEmail(email)) {
+                    setState(() => error = "Please enter a valid email.");
+                    return;
+                  }
+
+                  Navigator.pop(
+                    ctx,
+                    KnowledgeUploadInfo(
+                      category: cat,
+                      name: name,
+                      department: dept,
+                      phone: phone,
+                      email: email,
+                      reportingHead: head,
+                    ),
+                  );
+                },
+                child: const Text("Continue"),
               ),
             ],
           );
@@ -202,6 +237,20 @@ Future<String?> showCategoryPickerDialog({
   );
 }
 
+Widget _inputField(TextEditingController c, String label) {
+  return TextField(
+    controller: c,
+    decoration: InputDecoration(
+      labelText: label,
+      border: const OutlineInputBorder(),
+      isDense: true,
+    ),
+  );
+}
+
+/// ---------------------------
+/// Dashboard Screen
+/// ---------------------------
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -212,6 +261,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   CrisisType _crisis = CrisisType.supplierFailure;
   Severity _severity = Severity.high;
+
   final KnowledgeCategoryStore _categoryStore = KnowledgeCategoryStore();
 
   @override
@@ -308,7 +358,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ),
         const SizedBox(width: 12),
-        Expanded(flex: 4, child: _RightPanelEvidence(categoryStore: _categoryStore)),
+        Expanded(
+          flex: 4,
+          child: _RightPanelEvidence(categoryStore: _categoryStore),
+        ),
       ],
     );
   }
@@ -354,13 +407,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) =>
-            ChatScreen(initialCrisis: _crisis, initialSeverity: _severity),
+        builder: (_) => ChatScreen(initialCrisis: _crisis, initialSeverity: _severity),
       ),
     );
   }
 }
 
+/// ---------------------------
+/// Sidebar
+/// ---------------------------
 class _Sidebar extends StatelessWidget {
   final VoidCallback onOpenChat;
   const _Sidebar({required this.onOpenChat});
@@ -383,50 +438,51 @@ class _Sidebar extends StatelessWidget {
                 CircleAvatar(
                   radius: 18,
                   backgroundColor: Color(0xFFB42318),
-                  child: Icon(
-                    LucideIcons.shield,
-                    color: Colors.white,
-                    size: 18,
-                  ),
+                  child: Icon(LucideIcons.shield, color: Colors.white, size: 18),
                 ),
                 SizedBox(width: 10),
-                Text(
-                  "CrisisAssist AI",
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                ),
+                Text("CrisisAssist AI", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
               ],
             ),
             const SizedBox(height: 18),
+
             _NavItem(
               icon: LucideIcons.layoutDashboard,
               label: "Dashboard",
               selected: true,
               onTap: () {},
             ),
+
             _NavItem(
               icon: LucideIcons.messageSquare,
               label: "AI Chat",
               selected: false,
               onTap: onOpenChat,
             ),
-        _NavItem(
-          icon: LucideIcons.bookOpen,
-          label: "Knowledge Hub",
-          selected: false,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const KnowledgeHubScreen()),
-            );
-          },
-        ),
+
+            _NavItem(
+              icon: LucideIcons.bookOpen,
+              label: "Knowledge Hub",
+              selected: false,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => KnowledgeHubScreen(), // ✅ no const
+                  ),
+                );
+              },
+            ),
+
             _NavItem(
               icon: LucideIcons.settings,
               label: "Settings",
               selected: false,
               onTap: () {},
             ),
+
             const Spacer(),
+
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -436,16 +492,10 @@ class _Sidebar extends StatelessWidget {
               ),
               child: Row(
                 children: const [
-                  CircleAvatar(
-                    radius: 16,
-                    child: Icon(LucideIcons.user, size: 16),
-                  ),
+                  CircleAvatar(radius: 16, child: Icon(LucideIcons.user, size: 16)),
                   SizedBox(width: 10),
                   Expanded(
-                    child: Text(
-                      "Employee (Supply)\nOnline",
-                      style: TextStyle(fontSize: 12),
-                    ),
+                    child: Text("Employee (Supply)\nOnline", style: TextStyle(fontSize: 12)),
                   ),
                 ],
               ),
@@ -513,19 +563,19 @@ class _TopBar extends StatelessWidget {
             child: Icon(LucideIcons.shield, color: Colors.white, size: 18),
           ),
         if (!isWide) const SizedBox(width: 10),
+
         Expanded(
           child: TextField(
             decoration: InputDecoration(
               hintText: "Search SOPs, suppliers, incidents...",
               prefixIcon: const Icon(LucideIcons.search),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 14,
-              ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
             ),
           ),
         ),
+
         const SizedBox(width: 12),
+
         OutlinedButton.icon(
           onPressed: onOpenChat,
           icon: const Icon(LucideIcons.messageSquare, size: 18),
@@ -536,6 +586,9 @@ class _TopBar extends StatelessWidget {
   }
 }
 
+/// ---------------------------
+/// Cards / Panels
+/// ---------------------------
 class _CrisisHeader extends StatelessWidget {
   final CrisisType crisis;
   final Severity severity;
@@ -564,10 +617,8 @@ class _CrisisHeader extends StatelessWidget {
                 const Icon(LucideIcons.alertCircle),
                 const SizedBox(width: 10),
                 const Expanded(
-                  child: Text(
-                    "Active Crisis Context",
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-                  ),
+                  child: Text("Active Crisis Context",
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
                 ),
                 ElevatedButton.icon(
                   onPressed: onOpenChat,
@@ -612,7 +663,7 @@ class _CrisisHeader extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             const Text(
-              "Tip: Choosing a crisis context makes AI answers faster and more accurate (less back-and-forth).",
+              "Tip: Choosing a crisis context makes AI answers faster and more accurate.",
               style: TextStyle(color: Color(0xFF6B7280)),
             ),
           ],
@@ -653,11 +704,7 @@ class _DropdownCard<T> extends StatelessWidget {
           const SizedBox(height: 8),
           DropdownButtonFormField<T>(
             initialValue: value,
-            items: items
-                .map(
-                  (e) => DropdownMenuItem<T>(value: e, child: Text(label(e))),
-                )
-                .toList(),
+            items: items.map((e) => DropdownMenuItem<T>(value: e, child: Text(label(e)))).toList(),
             onChanged: (v) {
               if (v != null) onChanged(v);
             },
@@ -681,10 +728,8 @@ class _QuickActions extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              "Quick Crisis Actions",
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-            ),
+            const Text("Quick Crisis Actions",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
             const SizedBox(height: 12),
             Wrap(
               spacing: 10,
@@ -761,18 +806,10 @@ class _ActionChip extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    title,
-                    style: const TextStyle(fontWeight: FontWeight.w800),
-                  ),
+                  Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
                   const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      color: Color(0xFF6B7280),
-                      fontSize: 12,
-                    ),
-                  ),
+                  Text(subtitle,
+                      style: const TextStyle(color: Color(0xFF6B7280), fontSize: 12)),
                 ],
               ),
             ),
@@ -788,11 +825,7 @@ class _KpiCard extends StatelessWidget {
   final String title;
   final String value;
   final IconData icon;
-  const _KpiCard({
-    required this.title,
-    required this.value,
-    required this.icon,
-  });
+  const _KpiCard({required this.title, required this.value, required this.icon});
 
   @override
   Widget build(BuildContext context) {
@@ -810,21 +843,10 @@ class _KpiCard extends StatelessWidget {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: Color(0xFF6B7280),
-                    fontSize: 12,
-                  ),
-                ),
+                Text(title,
+                    style: const TextStyle(color: Color(0xFF6B7280), fontSize: 12)),
                 const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
+                Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
               ],
             ),
           ],
@@ -845,23 +867,12 @@ class _RecentActivity extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: const [
-            Text(
-              "Recent Activity",
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-            ),
+            Text("Recent Activity",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
             SizedBox(height: 12),
-            _ActivityRow(
-              title: "Asked: alternate suppliers for resin X12",
-              time: "2m ago",
-            ),
-            _ActivityRow(
-              title: "Opened: SOP - Emergency Production Change",
-              time: "18m ago",
-            ),
-            _ActivityRow(
-              title: "Resolved: IT Outage workaround checklist",
-              time: "1h ago",
-            ),
+            _ActivityRow(title: "Asked: alternate suppliers for resin X12", time: "2m ago"),
+            _ActivityRow(title: "Opened: SOP - Emergency Production Change", time: "18m ago"),
+            _ActivityRow(title: "Resolved: IT Outage workaround checklist", time: "1h ago"),
           ],
         ),
       ),
@@ -882,16 +893,8 @@ class _ActivityRow extends StatelessWidget {
         children: [
           const Icon(LucideIcons.dot, size: 18),
           const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              title,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-          ),
-          Text(
-            time,
-            style: const TextStyle(color: Color(0xFF6B7280), fontSize: 12),
-          ),
+          Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w600))),
+          Text(time, style: const TextStyle(color: Color(0xFF6B7280), fontSize: 12)),
         ],
       ),
     );
@@ -909,23 +912,12 @@ class _RecommendedPlaybooks extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              "Recommended Playbooks",
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-            ),
+            const Text("Recommended Playbooks",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
             const SizedBox(height: 12),
-            _PlaybookTile(
-              title: "Supplier Failure – Alternate Vendor Protocol",
-              meta: "SOP • Updated 2 weeks ago",
-            ),
-            _PlaybookTile(
-              title: "Emergency Production Change – Safety Checklist",
-              meta: "Checklist • Updated 1 month ago",
-            ),
-            _PlaybookTile(
-              title: "System Outage – Offline Operations Guide",
-              meta: "Guide • Updated 3 days ago",
-            ),
+            _PlaybookTile(title: "Supplier Failure – Alternate Vendor Protocol", meta: "SOP • Updated 2 weeks ago"),
+            _PlaybookTile(title: "Emergency Production Change – Safety Checklist", meta: "Checklist • Updated 1 month ago"),
+            _PlaybookTile(title: "System Outage – Offline Operations Guide", meta: "Guide • Updated 3 days ago"),
           ],
         ),
       ),
@@ -960,18 +952,9 @@ class _PlaybookTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
+                Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
                 const SizedBox(height: 2),
-                Text(
-                  meta,
-                  style: const TextStyle(
-                    color: Color(0xFF6B7280),
-                    fontSize: 12,
-                  ),
-                ),
+                Text(meta, style: const TextStyle(color: Color(0xFF6B7280), fontSize: 12)),
               ],
             ),
           ),
@@ -982,6 +965,9 @@ class _PlaybookTile extends StatelessWidget {
   }
 }
 
+/// ---------------------------
+/// Right Panel with Upload Knowledge button
+/// ---------------------------
 class _RightPanelEvidence extends StatelessWidget {
   final KnowledgeCategoryStore categoryStore;
   const _RightPanelEvidence({required this.categoryStore});
@@ -994,83 +980,108 @@ class _RightPanelEvidence extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              "Evidence & Trust Panel",
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-            ),
+            const Text("Evidence & Trust Panel",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
             const SizedBox(height: 8),
             const Text(
-              "AI answers will cite these sources (reduces hallucinations + improves trust).",
+              "Upload PDFs to build your knowledge base.",
               style: TextStyle(color: Color(0xFF6B7280)),
             ),
             const SizedBox(height: 12),
-            _EvidenceTile(
-              title: "SOP-014: Emergency Production Change",
-              meta: "SOP • Updated 2025-11-28 • Confidence: 0.86",
-            ),
-            _EvidenceTile(
-              title: "Supplier DB: Resin Category – Tier 1 Vendors",
-              meta: "Database • Updated 2025-12-01 • Confidence: 0.79",
-            ),
-            _EvidenceTile(
-              title: "Training: New Process Line Setup",
-              meta: "Training • Updated 2025-10-12 • Confidence: 0.74",
-            ),
-            const SizedBox(height: 12),
+
             const Divider(),
             const SizedBox(height: 8),
+
             Row(
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
+                    icon: const Icon(LucideIcons.upload, size: 18),
+                    label: const Text("Upload Knowledge"),
                     onPressed: () async {
                       try {
-                        final category = await showCategoryPickerDialog(
+                        // 1) Open SINGLE dialog for category + metadata
+                        final info = await showKnowledgeUploadDialog(
                           context: context,
                           store: categoryStore,
                         );
-                        if (category == null) return;
+                        if (info == null) return;
 
+                        // 2) Pick PDF
                         final picked = await FilePicker.platform.pickFiles(
                           type: FileType.custom,
                           allowedExtensions: const ['pdf'],
-                          withData: true, // REQUIRED for Flutter Web
+                          withData: true, // web needs bytes
                         );
-
                         if (picked == null || picked.files.isEmpty) return;
 
                         final file = picked.files.first;
-
                         final bytes = file.bytes;
                         if (bytes == null) {
-                          throw Exception('No file bytes found. Make sure withData: true.');
+                          throw Exception('No file bytes found. Use withData: true.');
                         }
 
                         final originalName = file.name;
-                        final safeName = originalName.replaceAll(
-                          RegExp(r'[^a-zA-Z0-9._-]'),
-                          '_',
-                        );
+                        final safeName = originalName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
 
-                        final storagePath =
-                            'knowledge/$category/${DateTime.now().millisecondsSinceEpoch}_$safeName';
+                        // 3) Generate fileId (same for Storage + Firestore)
+                        final fileId = FirebaseFirestore.instance.collection('knowledge').doc().id;
 
-                        final ref = FirebaseStorage.instance.ref().child(storagePath);
+                        // 4) Storage path
+                        final storagePath = 'knowledge/${info.category}/${fileId}_$safeName';
+                        final ref = FirebaseStorage.instance.ref(storagePath);
 
+                        // If you have auth, replace with FirebaseAuth user email/name
+                        final uploadedBy = "unknown"; // TODO: set from FirebaseAuth
+
+                        // 5) Upload to Storage (store metadata here too)
                         await ref.putData(
                           bytes,
                           SettableMetadata(
                             contentType: 'application/pdf',
                             customMetadata: {
-                              'originalName': originalName,
-                              'category': category,
+                              'fileId': fileId,
+                              'category': info.category,
+                              'ownerName': info.name,
+                              'department': info.department,
+                              'phone': info.phone,
+                              'email': info.email,
+                              'reportingHead': info.reportingHead,
+                              'uploadedAt': DateTime.now().toIso8601String(),
+                              'uploadedBy': uploadedBy,
                               'platform': kIsWeb ? 'web' : 'mobile',
+                              'originalName': originalName,
                             },
                           ),
                         );
 
+                        // 6) Firestore doc
+                        final url = await ref.getDownloadURL();
+
+                        await FirebaseFirestore.instance
+                            .collection('knowledge')
+                            .doc(fileId)
+                            .set({
+                          'fileId': fileId,
+                          'name': originalName,
+                          'safeName': safeName,
+                          'category': info.category,
+                          'storagePath': storagePath,
+                          'url': url,
+                          'owner': {
+                            'name': info.name,
+                            'department': info.department,
+                            'phone': info.phone,
+                            'email': info.email,
+                            'reportingHead': info.reportingHead,
+                          },
+                          'uploadedAt': FieldValue.serverTimestamp(),
+                          'uploadedBy': uploadedBy,
+                          'platform': kIsWeb ? 'web' : 'mobile',
+                        });
+
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Uploaded ✅ $originalName to "$category"')),
+                          SnackBar(content: Text('Uploaded ✅ $originalName')),
                         );
                       } catch (e) {
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -1078,70 +1089,12 @@ class _RightPanelEvidence extends StatelessWidget {
                         );
                       }
                     },
-                    icon: const Icon(LucideIcons.upload, size: 18),
-                    label: const Text("Upload Knowledge"),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () {},
-                    icon: const Icon(LucideIcons.shieldAlert, size: 18),
-                    label: const Text("Risk Notes"),
                   ),
                 ),
               ],
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _EvidenceTile extends StatelessWidget {
-  final String title;
-  final String meta;
-  const _EvidenceTile({required this.title, required this.meta});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        color: Colors.white,
-      ),
-      child: Row(
-        children: [
-          const CircleAvatar(
-            radius: 16,
-            backgroundColor: Color(0xFFFEE4E2),
-            child: Icon(LucideIcons.bookMarked, size: 16),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  meta,
-                  style: const TextStyle(
-                    color: Color(0xFF6B7280),
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
