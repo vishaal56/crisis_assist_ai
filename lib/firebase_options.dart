@@ -67,4 +67,5 @@ class DefaultFirebaseOptions {
     storageBucket: 'crisis-assist-ai.firebasestorage.app',
     iosBundleId: 'com.example.crisisAssistAi',
   );
+
 }
