@@ -1,1 +1,37 @@
-{"flutter":{"platforms":{"macos":{"default":{"projectId":"crisis-assist-ai","appId":"1:424484452386:ios:43aac2cfcce1c6e396f27b","uploadDebugSymbols":false,"fileOutput":"macos/Runner/GoogleService-Info.plist"}},"dart":{"lib/firebase_options.dart":{"projectId":"crisis-assist-ai","configurations":{"macos":"1:424484452386:ios:43aac2cfcce1c6e396f27b","web":"1:424484452386:web:eadf490b11945c7296f27b"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "macos": {
+        "default": {
+          "projectId": "crisis-assist-ai",
+          "appId": "1:424484452386:ios:43aac2cfcce1c6e396f27b",
+          "uploadDebugSymbols": false,
+          "fileOutput": "macos/Runner/GoogleService-Info.plist"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "crisis-assist-ai",
+          "configurations": {
+            "macos": "1:424484452386:ios:43aac2cfcce1c6e396f27b",
+            "web": "1:424484452386:web:eadf490b11945c7296f27b"
+          }
+        }
+      }
+    }
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "disallowLegacyRuntimeConfig": true,
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ]
+    }
+  ]
+}

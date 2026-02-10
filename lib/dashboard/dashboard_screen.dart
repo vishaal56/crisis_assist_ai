@@ -915,9 +915,18 @@ class _RecommendedPlaybooks extends StatelessWidget {
             const Text("Recommended Playbooks",
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
             const SizedBox(height: 12),
-            _PlaybookTile(title: "Supplier Failure – Alternate Vendor Protocol", meta: "SOP • Updated 2 weeks ago"),
-            _PlaybookTile(title: "Emergency Production Change – Safety Checklist", meta: "Checklist • Updated 1 month ago"),
-            _PlaybookTile(title: "System Outage – Offline Operations Guide", meta: "Guide • Updated 3 days ago"),
+            _PlaybookTile(
+              title: "Supplier Failure – Alternate Vendor Protocol",
+              meta: "SOP • Updated 2 weeks ago",
+            ),
+            _PlaybookTile(
+              title: "Emergency Production Change – Safety Checklist",
+              meta: "Checklist • Updated 1 month ago",
+            ),
+            _PlaybookTile(
+              title: "System Outage – Offline Operations Guide",
+              meta: "Guide • Updated 3 days ago",
+            ),
           ],
         ),
       ),
@@ -966,7 +975,7 @@ class _PlaybookTile extends StatelessWidget {
 }
 
 /// ---------------------------
-/// Right Panel with Upload Knowledge button
+/// Right Panel with Upload Knowledge button (TXT version)
 /// ---------------------------
 class _RightPanelEvidence extends StatelessWidget {
   final KnowledgeCategoryStore categoryStore;
@@ -984,7 +993,7 @@ class _RightPanelEvidence extends StatelessWidget {
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
             const SizedBox(height: 8),
             const Text(
-              "Upload PDFs to build your knowledge base.",
+              "Upload TXT files to build your knowledge base.",
               style: TextStyle(color: Color(0xFF6B7280)),
             ),
             const SizedBox(height: 12),
@@ -997,7 +1006,7 @@ class _RightPanelEvidence extends StatelessWidget {
                 Expanded(
                   child: OutlinedButton.icon(
                     icon: const Icon(LucideIcons.upload, size: 18),
-                    label: const Text("Upload Knowledge"),
+                    label: const Text("Upload Knowledge (.txt)"),
                     onPressed: () async {
                       try {
                         // 1) Open SINGLE dialog for category + metadata
@@ -1007,10 +1016,10 @@ class _RightPanelEvidence extends StatelessWidget {
                         );
                         if (info == null) return;
 
-                        // 2) Pick PDF
+                        // 2) Pick TXT
                         final picked = await FilePicker.platform.pickFiles(
                           type: FileType.custom,
-                          allowedExtensions: const ['pdf'],
+                          allowedExtensions: const ['txt'],
                           withData: true, // web needs bytes
                         );
                         if (picked == null || picked.files.isEmpty) return;
@@ -1022,23 +1031,36 @@ class _RightPanelEvidence extends StatelessWidget {
                         }
 
                         final originalName = file.name;
-                        final safeName = originalName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
 
-                        // 3) Generate fileId (same for Storage + Firestore)
+                        // Extra safety: only allow .txt
+                        if (!originalName.toLowerCase().endsWith('.txt')) {
+                          throw Exception('Please upload a .txt file.');
+                        }
+
+                        final safeName =
+                        originalName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+
+                        // 3) Extract text locally (no cloud function needed)
+                        final textContent = String.fromCharCodes(bytes).trim();
+                        if (textContent.isEmpty) {
+                          throw Exception('The .txt file is empty.');
+                        }
+
+                        // 4) Generate fileId (same for Storage + Firestore)
                         final fileId = FirebaseFirestore.instance.collection('knowledge').doc().id;
 
-                        // 4) Storage path
+                        // 5) Storage path
                         final storagePath = 'knowledge/${info.category}/${fileId}_$safeName';
                         final ref = FirebaseStorage.instance.ref(storagePath);
 
                         // If you have auth, replace with FirebaseAuth user email/name
                         final uploadedBy = "unknown"; // TODO: set from FirebaseAuth
 
-                        // 5) Upload to Storage (store metadata here too)
+                        // 6) Upload to Storage (store metadata here too)
                         await ref.putData(
                           bytes,
                           SettableMetadata(
-                            contentType: 'application/pdf',
+                            contentType: 'text/plain',
                             customMetadata: {
                               'fileId': fileId,
                               'category': info.category,
@@ -1051,11 +1073,12 @@ class _RightPanelEvidence extends StatelessWidget {
                               'uploadedBy': uploadedBy,
                               'platform': kIsWeb ? 'web' : 'mobile',
                               'originalName': originalName,
+                              'fileType': 'txt',
                             },
                           ),
                         );
 
-                        // 6) Firestore doc
+                        // 7) Firestore doc (store link + extracted text)
                         final url = await ref.getDownloadURL();
 
                         await FirebaseFirestore.instance
@@ -1068,6 +1091,11 @@ class _RightPanelEvidence extends StatelessWidget {
                           'category': info.category,
                           'storagePath': storagePath,
                           'url': url,
+                          'fileType': 'txt',
+
+                          // ✅ key part: text extracted locally
+                          'textContent': textContent,
+
                           'owner': {
                             'name': info.name,
                             'department': info.department,

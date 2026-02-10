@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import 'package:crisis_assist_ai/core/app_enums.dart';
-import '../services/openai_service.dart';
+import '../services/openai_proxy_service.dart';
 
 /// Evidence panel items are simple maps so it never breaks types.
 final ValueNotifier<List<Map<String, String>>> evidenceNotifier =
@@ -151,8 +151,12 @@ class ChatMainPanel extends StatefulWidget {
 
 class _ChatMainPanelState extends State<ChatMainPanel> {
   bool _loading = false;
+
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scroll = ScrollController();
+
+  // ✅ Cloud Function proxy
+  final OpenAIProxyService _openAI = OpenAIProxyService();
 
   final List<_ChatMessage> _messages = [
     _ChatMessage(
@@ -164,6 +168,7 @@ class _ChatMainPanelState extends State<ChatMainPanel> {
 
   @override
   void dispose() {
+    // ✅ NO _openAI.dispose(); (service has nothing to dispose)
     _controller.dispose();
     _scroll.dispose();
     super.dispose();
@@ -195,20 +200,31 @@ class _ChatMainPanelState extends State<ChatMainPanel> {
     }
   }
 
-  String _buildSystemContext() {
-    return '''
-You are a crisis response assistant for a manufacturing company.
-Be concise, structured, and action-oriented.
+  // ✅ backend keys
+  String _crisisKey(CrisisType c) {
+    switch (c) {
+      case CrisisType.supplierFailure:
+        return "supplierFailure";
+      case CrisisType.productionHalt:
+        return "productionHalt";
+      case CrisisType.systemOutage:
+        return "systemOutage";
+      case CrisisType.emergencySop:
+        return "emergencySop";
+    }
+  }
 
-Context:
-- Crisis Type: ${_crisisLabel(widget.initialCrisis)}
-- Severity: ${_severityLabel(widget.initialSeverity)}
-
-When answering, use this format:
-1) Immediate actions (bullets)
-2) Risks / watchouts (bullets)
-3) Next 30 minutes checklist (bullets)
-''';
+  String _severityKey(Severity s) {
+    switch (s) {
+      case Severity.low:
+        return "low";
+      case Severity.medium:
+        return "medium";
+      case Severity.high:
+        return "high";
+      case Severity.critical:
+        return "critical";
+    }
   }
 
   void _scrollToBottom() {
@@ -220,51 +236,6 @@ When answering, use this format:
         curve: Curves.easeOut,
       );
     });
-  }
-
-  String _buildPrompt(String userText) {
-    String crisisLabel(CrisisType c) {
-      switch (c) {
-        case CrisisType.supplierFailure:
-          return "Supplier Failure";
-        case CrisisType.productionHalt:
-          return "Production Halt";
-        case CrisisType.systemOutage:
-          return "System Outage";
-        case CrisisType.emergencySop:
-          return "Emergency SOP";
-      }
-    }
-
-    String severityLabel(Severity s) {
-      switch (s) {
-        case Severity.low:
-          return "Low";
-        case Severity.medium:
-          return "Medium";
-        case Severity.high:
-          return "High";
-        case Severity.critical:
-          return "Critical";
-      }
-    }
-
-    return '''
-You are a crisis response assistant for a manufacturing company.
-Be concise, structured, and action-oriented.
-
-Context:
-- Crisis Type: ${crisisLabel(widget.initialCrisis)}
-- Severity: ${severityLabel(widget.initialSeverity)}
-
-User question:
-$userText
-
-Respond in this format:
-1) Immediate actions (bullets)
-2) Risks / watchouts (bullets)
-3) Next 30 minutes checklist (bullets)
-''';
   }
 
   Future<void> _send() async {
@@ -280,10 +251,12 @@ Respond in this format:
     _scrollToBottom();
 
     try {
-      final prompt = _buildPrompt(text);
-
-      // ✅ THIS LINE FIXES THE ERROR
-      final reply = await OpenAIService.sendMessage(prompt);
+      // ✅ Send ONLY user message; Cloud Function builds the full prompt
+      final reply = await _openAI.sendMessage(
+        message: text,
+        crisisType: _crisisKey(widget.initialCrisis),
+        severity: _severityKey(widget.initialSeverity),
+      );
 
       if (!mounted) return;
 
@@ -293,8 +266,8 @@ Respond in this format:
 
       evidenceNotifier.value = [
         {
-          "title": "OpenAI",
-          "subtitle": OpenAIService.modelName(),
+          "title": "OpenAI (via Cloud Function)",
+          "subtitle": "openaiChat",
           "confidence": "n/a",
         },
         {

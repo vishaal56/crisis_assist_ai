@@ -424,10 +424,15 @@ class KnowledgeStorageService {
       ),
     );
   }
+
+  /// ✅ DELETE a document from Firebase Storage by its fullPath
+  Future<void> deleteDoc(KnowledgeDoc doc) async {
+    await storage.ref(doc.fullPath).delete();
+  }
 }
 
 /// ===============================
-/// UI SCREEN: KnowledgeHubScreen
+/// UI SCREEN: KnowledgeHubScreen (WITH DELETE OPTION)
 /// ===============================
 class KnowledgeHubScreen extends StatefulWidget {
   const KnowledgeHubScreen({super.key});
@@ -444,6 +449,9 @@ class _KnowledgeHubScreenState extends State<KnowledgeHubScreen> {
 
   bool _loading = true;
   String _selectedCategory = 'All';
+
+  // ✅ Track deletion to disable only that card button
+  final Set<String> _deletingPaths = <String>{};
 
   List<KnowledgeDoc> _all = [];
   List<KnowledgeDoc> _filtered = [];
@@ -556,6 +564,51 @@ class _KnowledgeHubScreenState extends State<KnowledgeHubScreen> {
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copied ✅')));
   }
 
+  /// ✅ Confirm + Delete
+  Future<void> _confirmAndDelete(KnowledgeDoc doc) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Delete document?"),
+        content: Text('This will permanently delete "${doc.name}".'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Delete"),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true) return;
+
+    setState(() => _deletingPaths.add(doc.fullPath));
+
+    try {
+      await _service.deleteDoc(doc);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Deleted ✅")),
+      );
+
+      await _load(); // refresh list
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Delete failed: $e")),
+      );
+    } finally {
+      if (mounted) setState(() => _deletingPaths.remove(doc.fullPath));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cats = _categoriesFromStorage;
@@ -629,11 +682,18 @@ class _KnowledgeHubScreenState extends State<KnowledgeHubScreen> {
               )
                   : ListView.builder(
                 itemCount: _filtered.length,
-                itemBuilder: (_, i) => _KnowledgeCard(
-                  doc: _filtered[i],
-                  onView: () => _openPdf(_filtered[i].url),
-                  onCopy: () => _copy(_filtered[i].url),
-                ),
+                itemBuilder: (_, i) {
+                  final d = _filtered[i];
+                  final deleting = _deletingPaths.contains(d.fullPath);
+
+                  return _KnowledgeCard(
+                    doc: d,
+                    onView: deleting ? null : () => _openPdf(d.url),
+                    onCopy: deleting ? null : () => _copy(d.url),
+                    onDelete: deleting ? null : () => _confirmAndDelete(d),
+                    isDeleting: deleting,
+                  );
+                },
               ),
             ),
           ],
@@ -644,20 +704,25 @@ class _KnowledgeHubScreenState extends State<KnowledgeHubScreen> {
 }
 
 /// ===============================
-/// Card UI
+/// Card UI (WITH DELETE BUTTON + PER-CARD LOADING)
 /// ===============================
 class _KnowledgeCard extends StatelessWidget {
   final KnowledgeDoc doc;
-  final VoidCallback onView;
-  final VoidCallback onCopy;
+  final VoidCallback? onView;
+  final VoidCallback? onCopy;
+  final VoidCallback? onDelete;
+  final bool isDeleting;
 
   const _KnowledgeCard({
     required this.doc,
     required this.onView,
     required this.onCopy,
+    required this.onDelete,
+    required this.isDeleting,
   });
 
-  String metaVal(String key) => (doc.meta[key] ?? '').trim().isEmpty ? '—' : doc.meta[key]!.trim();
+  String metaVal(String key) =>
+      (doc.meta[key] ?? '').trim().isEmpty ? '—' : doc.meta[key]!.trim();
 
   @override
   Widget build(BuildContext context) {
@@ -731,6 +796,27 @@ class _KnowledgeCard extends StatelessWidget {
                   icon: const Icon(LucideIcons.copy, size: 18),
                   label: const Text("Copy Link"),
                 ),
+                const SizedBox(width: 10),
+
+                // Delete (red)
+                OutlinedButton.icon(
+                  onPressed: onDelete,
+                  icon: const Icon(LucideIcons.trash2, size: 18, color: Colors.red),
+                  label: Text(isDeleting ? "Deleting..." : "Delete"),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red,
+                    side: const BorderSide(color: Colors.red),
+                  ),
+                ),
+
+                if (isDeleting) ...[
+                  const SizedBox(width: 12),
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ],
               ],
             ),
           ],
