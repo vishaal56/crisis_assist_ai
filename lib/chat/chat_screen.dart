@@ -155,8 +155,10 @@ class _ChatMainPanelState extends State<ChatMainPanel> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scroll = ScrollController();
 
-  // ✅ Cloud Function proxy
   final OpenAIProxyService _openAI = OpenAIProxyService();
+
+  /// ✅ stores the last OpenAI response id (memory pointer)
+  String? _previousResponseId;
 
   final List<_ChatMessage> _messages = [
     _ChatMessage(
@@ -168,7 +170,6 @@ class _ChatMainPanelState extends State<ChatMainPanel> {
 
   @override
   void dispose() {
-    // ✅ NO _openAI.dispose(); (service has nothing to dispose)
     _controller.dispose();
     _scroll.dispose();
     super.dispose();
@@ -251,23 +252,32 @@ class _ChatMainPanelState extends State<ChatMainPanel> {
     _scrollToBottom();
 
     try {
-      // ✅ Send ONLY user message; Cloud Function builds the full prompt
-      final reply = await _openAI.sendMessage(
+      // ✅ The Cloud Function returns a Map like:
+      // { reply: "...", responseId: "...", usedFiles: [...] }
+      final Map<String, dynamic> result = await _openAI.sendMessage(
         message: text,
         crisisType: _crisisKey(widget.initialCrisis),
         severity: _severityKey(widget.initialSeverity),
+        previousResponseId: _previousResponseId,
       );
+
+      final String replyText = (result["reply"] ?? "").toString().trim();
+      _previousResponseId = result["responseId"]?.toString();
+
+      final usedFiles = (result["usedFiles"] is List)
+          ? (result["usedFiles"] as List).map((e) => e.toString()).toList()
+          : <String>[];
 
       if (!mounted) return;
 
       setState(() {
-        _messages.add(_ChatMessage(isUser: false, text: reply));
+        _messages.add(_ChatMessage(isUser: false, text: replyText.isEmpty ? "No reply received." : replyText));
       });
 
       evidenceNotifier.value = [
         {
-          "title": "OpenAI (via Cloud Function)",
-          "subtitle": "openaiChat",
+          "title": "Knowledge TXT Used",
+          "subtitle": usedFiles.isEmpty ? "None" : usedFiles.take(3).join(" • "),
           "confidence": "n/a",
         },
         {
@@ -280,9 +290,7 @@ class _ChatMainPanelState extends State<ChatMainPanel> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _messages.add(
-          _ChatMessage(isUser: false, text: "⚠️ OpenAI error: $e"),
-        );
+        _messages.add(_ChatMessage(isUser: false, text: "⚠️ OpenAI error: $e"));
       });
     } finally {
       if (mounted) {
@@ -307,9 +315,7 @@ class _ChatMainPanelState extends State<ChatMainPanel> {
             itemCount: _messages.length,
             itemBuilder: (_, i) {
               final m = _messages[i];
-              return m.isUser
-                  ? UserBubble(text: m.text)
-                  : AIBubble(text: m.text);
+              return m.isUser ? UserBubble(text: m.text) : AIBubble(text: m.text);
             },
           ),
         ),
@@ -442,10 +448,7 @@ class AIBubble extends StatelessWidget {
           color: const Color(0xFFFEE4E2),
           borderRadius: BorderRadius.circular(16),
         ),
-        child: Text(
-          text,
-          style: const TextStyle(height: 1.35),
-        ),
+        child: Text(text, style: const TextStyle(height: 1.35)),
       ),
     );
   }

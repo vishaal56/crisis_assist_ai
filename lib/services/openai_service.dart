@@ -15,7 +15,7 @@ class OpenAIService {
   /// ✅ Minimal + compatible request (NO temperature)
   static Future<String> sendMessage(
       String prompt, {
-        int maxOutputTokens = 600,
+        int maxOutputTokens = 6000,
       }) async {
     final payload = {
       "model": model,

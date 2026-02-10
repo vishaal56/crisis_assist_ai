@@ -5,18 +5,21 @@ class OpenAIProxyService {
   static const String functionUrl =
       "https://us-west1-crisis-assist-ai.cloudfunctions.net/openaiChat";
 
-  Future<String> sendMessage({
+  /// Pass [previousResponseId] to get continuous chat memory
+  Future<Map<String, dynamic>> sendMessage({
     required String message,
-    String? crisisType,
-    String? severity,
+    required String crisisType,
+    required String severity,
+    String? previousResponseId,
   }) async {
     final res = await http.post(
       Uri.parse(functionUrl),
       headers: {"Content-Type": "application/json"},
       body: jsonEncode({
         "message": message,
-        "crisisType": crisisType ?? "general",
-        "severity": severity ?? "medium",
+        "crisisType": crisisType,
+        "severity": severity,
+        "previousResponseId": previousResponseId,
       }),
     );
 
@@ -24,13 +27,6 @@ class OpenAIProxyService {
       throw Exception("Function error ${res.statusCode}: ${res.body}");
     }
 
-    final data = jsonDecode(res.body);
-    final reply = (data["reply"] ?? "").toString().trim();
-
-    if (reply.isEmpty) {
-      throw Exception("No reply received from AI.");
-    }
-
-    return reply;
+    return jsonDecode(res.body) as Map<String, dynamic>;
   }
 }
