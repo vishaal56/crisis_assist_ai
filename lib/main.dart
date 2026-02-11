@@ -24,7 +24,7 @@ class CrisisAssistApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'CrisisAssist AI',
+      title: 'Crisis AI',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       home: const LoginScreen(),

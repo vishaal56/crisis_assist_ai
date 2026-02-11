@@ -441,7 +441,7 @@ class _Sidebar extends StatelessWidget {
                   child: Icon(LucideIcons.shield, color: Colors.white, size: 18),
                 ),
                 SizedBox(width: 10),
-                Text("CrisisAssist AI", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                Text("Crisis AI", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
               ],
             ),
             const SizedBox(height: 18),

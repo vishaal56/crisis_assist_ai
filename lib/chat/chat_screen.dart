@@ -381,7 +381,7 @@ class _ChatTopBar extends StatelessWidget {
           const Icon(LucideIcons.messageSquare, size: 18),
           const SizedBox(width: 10),
           const Text(
-            "AI Crisis Chat",
+            "Crisis AI Chat",
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
           ),
           const SizedBox(width: 12),
